@@ -3,97 +3,109 @@ import pandas as pd
 import time
 import os
 from datetime import datetime
+import matplotlib.pyplot as plt
+
+# 서버 환경(GUI 없음)에서 그래프 생성을 위한 설정
+plt.switch_backend('Agg')
+plt.rcParams['font.sans-serif'] = ['DejaVu Sans'] 
 
 today = datetime.now().strftime("%Y-%m-%d")
-print(f"📅 [오늘의 날짜] {today} - 와우 PvP 데이터 분석을 시작합니다.")
+print(f"📅 [분석 시작] {today} - 티어 리스트 및 순위 변동 그래프를 생성합니다.")
 
-# 1. 저장할 폴더 4개 생성 (없으면 만들고, 있으면 넘어감)
-folders = ["3v3_percentile", "shuffle_percentile", "3v3_tier_list", "shuffle_tier_list"]
-for folder in folders:
-    os.makedirs(folder, exist_ok=True)
+# 1. 폴더 구조 설정
+target_ratings = [2000, 2100, 2200, 2300, 2400, 2500]
+modes = ["3v3", "shuffle"]
 
+for mode in modes:
+    for r in target_ratings:
+        os.makedirs(f"{r}_{mode}_tier_list", exist_ok=True)
+    os.makedirs(f"{mode}_percentile", exist_ok=True)
+
+# 직업/특성 리스트
 wow_classes = {
-    "death-knight": ["blood", "frost", "unholy"],
-    "demon-hunter": ["havoc", "vengeance"],
-    "druid": ["balance", "feral", "guardian", "restoration"],
-    "evoker": ["augmentation", "devastation", "preservation"],
-    "hunter": ["beast-mastery", "marksmanship", "survival"],
-    "mage": ["arcane", "fire", "frost"],
-    "monk": ["brewmaster", "mistweaver", "windwalker"],
-    "paladin": ["holy", "protection", "retribution"],
-    "priest": ["discipline", "holy", "shadow"],
-    "rogue": ["assassination", "outlaw", "subtlety"],
-    "shaman": ["elemental", "enhancement", "restoration"],
-    "warlock": ["affliction", "demonology", "destruction"],
+    "death-knight": ["blood", "frost", "unholy"], "demon-hunter": ["havoc", "vengeance"],
+    "druid": ["balance", "feral", "guardian", "restoration"], "evoker": ["augmentation", "devastation", "preservation"],
+    "hunter": ["beast-mastery", "marksmanship", "survival"], "mage": ["arcane", "fire", "frost"],
+    "monk": ["brewmaster", "mistweaver", "windwalker"], "paladin": ["holy", "protection", "retribution"],
+    "priest": ["discipline", "holy", "shadow"], "rogue": ["assassination", "outlaw", "subtlety"],
+    "shaman": ["elemental", "enhancement", "restoration"], "warlock": ["affliction", "demonology", "destruction"],
     "warrior": ["arms", "fury", "protection"]
 }
 
-ratings = list(range(1000, 2700, 100))
-target_ratings = [2200, 2300, 2400, 2500] 
-calc_ratings = [r - 100 for r in target_ratings]
+ratings_idx = list(range(1000, 2700, 100))
+headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-}
-
-# 2. 파일 저장 경로에 폴더명 추가
-brackets = {
-    "3v3": {
-        "url_part": "leaderboard-distrubution", 
-        "raw_name": f"3v3_percentile/drustvar_3v3_raw_{today}.csv", 
-        "tier_name": f"3v3_tier_list/wow_3v3_tier_ranking_{today}.csv"
-    },
-    "shuffle": {
-        "url_part": "shuffle-distrubution", 
-        "raw_name": f"shuffle_percentile/drustvar_shuffle_raw_{today}.csv", 
-        "tier_name": f"shuffle_tier_list/wow_shuffle_tier_ranking_{today}.csv"
-    }
-}
-
-for bracket_name, info in brackets.items():
-    print(f"\n--- {bracket_name.upper()} 데이터 수집 시작 ---")
-    current_df = pd.DataFrame(index=ratings)
+# 2. 데이터 크롤링 및 분석
+for mode in modes:
+    url_part = "leaderboard-distrubution" if mode == "3v3" else "shuffle-distrubution"
+    print(f"\n--- {mode.upper()} 수집 중 ---")
+    current_df = pd.DataFrame(index=ratings_idx)
     
     for cls, specs in wow_classes.items():
         for spec in specs:
-            column_name = f"{cls.replace('-', ' ').title()} - {spec.replace('-', ' ').title()}"
-            url = f"https://drustvar.com/api/v1/leaderboard/{info['url_part']}?search[region]=all&search[bracket]={bracket_name}&search[role]=spec&search[cc]={cls}&search[cs]={spec}"
-            
+            col = f"{cls.replace('-', ' ').title()} - {spec.replace('-', ' ').title()}"
+            url = f"https://drustvar.com/api/v1/leaderboard/{url_part}?search[region]=all&search[bracket]={mode}&search[role]=spec&search[cc]={cls}&search[cs]={spec}"
             try:
-                response = requests.get(url, headers=headers, timeout=10)
-                if response.status_code == 200:
-                    data = response.json().get("stats", [])
-                    for item in data:
-                        rating = item["rating"]
-                        if rating in current_df.index:
-                            current_df.loc[rating, column_name] = item["percentile"]
-            except Exception as e:
-                print(f"[{column_name}] API 오류: {e}")
-            time.sleep(0.5)
+                res = requests.get(url, headers=headers, timeout=10)
+                if res.status_code == 200:
+                    for item in res.json().get("stats", []):
+                        if item["rating"] in current_df.index:
+                            current_df.loc[item["rating"], col] = item["percentile"]
+            except: pass
+            time.sleep(0.4)
 
     current_df = current_df.ffill().fillna(0)
-    current_df.index.name = "Rating"
-    
-    # 원본 파일 저장 (각각의 percentile 폴더로 들어감)
-    current_df.to_csv(info["raw_name"], encoding="utf-8-sig")
-    
-    valid_targets = []
-    valid_calcs = []
-    for target, calc in zip(target_ratings, calc_ratings):
-        if calc in current_df.index:
-            valid_targets.append(target)
-            valid_calcs.append(calc)
-            
-    if valid_calcs:
-        df_top_pct = 100 - current_df.loc[valid_calcs]
-        df_tier = df_top_pct.T
-        df_tier.columns = [f"{int(r)}+ 상위 (%)" for r in valid_targets]
-        sort_col = f"{int(valid_targets[0])}+ 상위 (%)"
-        df_tier = df_tier.sort_values(by=sort_col, ascending=False).round(3)
-        df_tier.index.name = "Class - Spec"
-        
-        # 티어 랭킹 파일 저장 (각각의 tier_list 폴더로 들어감)
-        df_tier.to_csv(info["tier_name"], encoding="utf-8-sig")
-        print(f"✅ {info['tier_name']} 저장 완료!")
+    current_df.to_csv(f"{mode}_percentile/raw_{today}.csv", encoding="utf-8-sig")
 
-print("\n🎉 오늘의 크롤링 및 분석이 모두 완료되었습니다!")
+    # 3. 점수대별 순위 계산 및 그래프 그리기
+    for target in target_ratings:
+        calc_r = target - 100
+        folder = f"{target}_{mode}_tier_list"
+        
+        # 상위 % 계산 및 순위 매기기 (비율이 높을수록 1위)
+        top_pct = 100 - current_df.loc[calc_r]
+        ranks = top_pct.rank(ascending=False, method='min')
+        
+        # 히스토리 업데이트
+        hist_file = f"{folder}/history_rank.csv"
+        df_rank_today = pd.DataFrame(ranks).T
+        df_rank_today.index = [today]
+        
+        if os.path.exists(hist_file):
+            df_hist = pd.read_csv(hist_file, index_col=0)
+            df_hist.loc[today] = df_rank_today.loc[today]
+        else:
+            df_hist = df_rank_today
+        df_hist.to_csv(hist_file, encoding="utf-8-sig")
+
+        # 4. 순위 변동 그래프 (Bump Chart) 생성
+        # 오늘 기준 Top 10 특성 추출
+        current_top10 = ranks.sort_values().head(10).index
+        
+        plt.figure(figsize=(12, 7))
+        for spec in current_top10:
+            # 최근 최대 14일치 데이터만 시각화
+            plot_data = df_hist[spec].tail(14)
+            plt.plot(plot_data.index, plot_data.values, marker='o', linewidth=3, label=spec)
+            
+            # 선 끝에 특성 이름 표시
+            plt.text(len(plot_data)-0.5, plot_data.values[-1], spec, fontsize=9, va='center')
+
+        plt.title(f"{target}+ {mode.upper()} Top 10 Rank Trend", fontsize=15, pad=20)
+        plt.ylabel("Rank", fontsize=12)
+        plt.xlabel("Date", fontsize=12)
+        
+        # Y축 반전 (1위가 맨 위로)
+        plt.gca().invert_yaxis()
+        
+        # Y축 눈금을 1위부터 20위 정도까지만 표시 (가독성)
+        plt.yticks(range(1, 21))
+        plt.grid(True, axis='y', linestyle='--', alpha=0.6)
+        plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=3, fontsize=9)
+        plt.tight_layout()
+
+        plt.savefig(f"{folder}/rank_trend_graph.png", dpi=150)
+        plt.close()
+        print(f"✅ {folder} 업데이트 완료")
+
+print("\n🎉 모든 작업이 완료되었습니다!")
