@@ -1,48 +1,41 @@
-# daily_wow_arena_tier_list
-World of Warcraft(와우) PvP 데이터를 매일 자동으로 수집하고, 각 점수대별(2000~2500+) 특성(Spec)의 상위 백분위 및 순위 변동을 분석하는 프로젝트입니다.
+# ⚔️ WoW Arena Meta Analytics Dashboard
 
-🚀 주요 기능 (Features)
-자동 데이터 수집 (Daily Scraping): 매일 오전 9시(KST)에 Drustvar API를 통해 3v3 및 Solo Shuffle의 실시간 데이터를 수집합니다.
+이 리포지토리는 세계 최대 PvP 데이터 사이트인 [Drustvar](https://www.google.com/search?q=https://drustvar.com)의 데이터를 기반으로, 매일 오전 9시(KST) 투기장 및 솔로 셔플의 **실시간 메타 변동을 추적하고 시각화**합니다.
 
-상위 백분위 분석 (Tier Analysis): 각 점수대별 누적 백분위를 계산하여, 해당 점수대 이상의 상위 유저 비율을 산출합니다.
+## 📊 실시간 메타 트렌드 (Live Dashboard)
 
-순위 변동 추적 (Rank Tracking): 매일 변동하는 특성별 순위를 rank_history에 누적 기록합니다.
+가장 최신의 60일간 순위 변동 그래프입니다. Y축 상단(1위)에 위치할수록 현재 해당 점수대에서 가장 강력한 영향력을 가진 특성(Spec)입니다.
 
-트렌드 시각화 (Visualization): 최근 14일간의 상위 10개 특성 순위 변화를 Bump Chart(순위 변동 그래프)로 생성하여 한눈에 메타 변화를 파악할 수 있게 합니다.
+### [3v3 Arena] 2400+ Meta Trend
 
-📂 리포지토리 구조 (Directory Structure)
-Plaintext
-.
+### [Solo Shuffle] 2400+ Meta Trend
 
-├── 3v3_percentile/        # 3v3 투기장 날짜별 원본 백분위 데이터 (CSV)
+---
 
-├── shuffle_percentile/    # 솔로 셔플 날짜별 원본 백분위 데이터 (CSV)
+## 🛠️ 핵심 분석 지표 (Key Analysis)
 
-├── 3v3_tier_list/         # 3v3 점수대별 상위 % 통합 랭킹 리스트
+| 기능 | 세부 사양 |
+| --- | --- |
+| **순위 추적 (Bump Chart)** | 최근 60일간의 전체 특성 순위 궤적을 유지하며 메타 흐름 파악 |
+| **Top 10 집중 분석** | 오늘 기준 상위 10개 특성을 굵은 선으로 강조하고 범례에 순위별 정렬 표시 |
+| **직업 가독성 (Class Colors)** | 전사(갈색), 법사(하늘색) 등 와우 공식 직업 색상을 적용하여 직관성 확보 |
+| **전 특성 모니터링** | 악마사냥꾼(파멸 포함) 등 모든 세부 특성의 누적 백분위 데이터 수집 |
+| **데이터 보존** | `rank_history` 내 CSV 파일을 통해 시즌 전체의 시계열 데이터 누적 관리 |
 
-├── shuffle_tier_list/     # 솔로 셔플 점수대별 상위 % 통합 랭킹 리스트
+## 📂 데이터 저장 구조 (Data Map)
 
-├── rank_history/          # 시계열 분석을 위한 점수대별 순위 누적 데이터
+* **`/plots`**: 최신 트렌드 그래프 이미지 (PNG)
+* **`/rank_history`**: 점수대별 순위 누적 데이터 (CSV)
+* **`/*_tier_list`**: 날짜별 상위 유저 백분위 통합 랭킹 (CSV)
+* **`/*_percentile`**: 전체 특성별 로우(Raw) 데이터 (CSV)
 
-├── plots/                 # [최신] 메타 트렌드 시각화 그래프 (PNG)
+---
 
-├── main.py                # 데이터 수집 및 분석 핵심 엔진
+## ⚙️ 시스템 아키텍처 (Technical Specs)
 
-└── .github/workflows/     # GitHub Actions 자동화 설정 (매일 09:00 실행)
-
-📈 메타 트렌드 미리보기 (Visual Preview)
-plots/ 폴더에서 각 점수대별 최신 트렌드 그래프를 확인할 수 있습니다. 그래프의 Y축은 순위(Rank)를 나타내며, 위로 갈수록 해당 점수대에서 가장 강력한 성능(또는 인구수)을 보여주는 1티어 특성입니다.
-
-Tip: 그래프는 매일 업데이트되며, 선이 우상향하고 있다면 현재 메타에서 급부상 중인 '사기 특성'일 확률이 높습니다.
-
-🛠️ 기술 스택 (Tech Stack)
-Language: Python 3.10+
-
-Libraries: Pandas, Requests, Matplotlib
-
-Automation: GitHub Actions
-
-⚠️ 주의 사항
-본 프로젝트는 교육 및 개인 분석용으로 제작되었습니다.
-
-데이터의 출처는 Drustvar이며, 게임 내 실시간 상황과 약간의 오차가 있을 수 있습니다.
+* **Data Engine**: Python 3.10 / Pandas / Matplotlib
+* **Automation**: GitHub Actions (Cron: `00:00 UTC`)
+* **Visualization Logic**:
+* 10위권 내 특성: **Solid & Bold Lines** (High Visibility)
+* 10위권 외 특성: **Faded & Thin Lines** (Historical Continuity)
+* Y-Axis: Inverted Rank (1-10 Focus Viewport)
