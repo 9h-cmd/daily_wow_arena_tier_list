@@ -5,23 +5,22 @@ import os
 from datetime import datetime
 import matplotlib.pyplot as plt
 
-# 서버 환경(GUI 없음)에서 그래프 생성을 위한 설정
+# 서버 환경 설정 및 폰트 설정
 plt.switch_backend('Agg')
-plt.rcParams['font.sans-serif'] = ['DejaVu Sans'] 
+plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
 
 today = datetime.now().strftime("%Y-%m-%d")
-print(f"📅 [분석 시작] {today} - 티어 리스트 및 순위 변동 그래프를 생성합니다.")
+print(f"📅 [분석 시작] {today} - 구조 최적화 및 시각화 작업을 시작합니다.")
 
-# 1. 폴더 구조 설정
-target_ratings = [2000, 2100, 2200, 2300, 2400, 2500]
-modes = ["3v3", "shuffle"]
+# 1. 고정 폴더 생성
+base_folders = [
+    "3v3_percentile", "shuffle_percentile", 
+    "3v3_tier_list", "shuffle_tier_list",
+    "rank_history", "plots"
+]
+for folder in base_folders:
+    os.makedirs(folder, exist_ok=True)
 
-for mode in modes:
-    for r in target_ratings:
-        os.makedirs(f"{r}_{mode}_tier_list", exist_ok=True)
-    os.makedirs(f"{mode}_percentile", exist_ok=True)
-
-# 직업/특성 리스트
 wow_classes = {
     "death-knight": ["blood", "frost", "unholy"], "demon-hunter": ["havoc", "vengeance"],
     "druid": ["balance", "feral", "guardian", "restoration"], "evoker": ["augmentation", "devastation", "preservation"],
@@ -32,13 +31,14 @@ wow_classes = {
     "warrior": ["arms", "fury", "protection"]
 }
 
+target_ratings = [2000, 2100, 2200, 2300, 2400, 2500]
 ratings_idx = list(range(1000, 2700, 100))
 headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
-# 2. 데이터 크롤링 및 분석
-for mode in modes:
+# 2. 데이터 수집 및 처리
+for mode in ["3v3", "shuffle"]:
     url_part = "leaderboard-distrubution" if mode == "3v3" else "shuffle-distrubution"
-    print(f"\n--- {mode.upper()} 수집 중 ---")
+    print(f"\n--- {mode.upper()} 데이터 수집 중 ---")
     current_df = pd.DataFrame(index=ratings_idx)
     
     for cls, specs in wow_classes.items():
@@ -57,17 +57,17 @@ for mode in modes:
     current_df = current_df.ffill().fillna(0)
     current_df.to_csv(f"{mode}_percentile/raw_{today}.csv", encoding="utf-8-sig")
 
-    # 3. 점수대별 순위 계산 및 그래프 그리기
+    # 3. 점수대별 랭킹 및 시각화
     for target in target_ratings:
         calc_r = target - 100
-        folder = f"{target}_{mode}_tier_list"
-        
-        # 상위 % 계산 및 순위 매기기 (비율이 높을수록 1위)
+        if calc_r not in current_df.index: continue
+
+        # 상위 % 계산 및 순위
         top_pct = 100 - current_df.loc[calc_r]
         ranks = top_pct.rank(ascending=False, method='min')
         
-        # 히스토리 업데이트
-        hist_file = f"{folder}/history_rank.csv"
+        # 히스토리 업데이트 (rank_history 폴더로 집중)
+        hist_file = f"rank_history/{mode}_{target}_history.csv"
         df_rank_today = pd.DataFrame(ranks).T
         df_rank_today.index = [today]
         
@@ -78,34 +78,34 @@ for mode in modes:
             df_hist = df_rank_today
         df_hist.to_csv(hist_file, encoding="utf-8-sig")
 
-        # 4. 순위 변동 그래프 (Bump Chart) 생성
-        # 오늘 기준 Top 10 특성 추출
+        # 4. 그래프 생성 (plots 폴더로 집중, 최신 1개만 유지)
         current_top10 = ranks.sort_values().head(10).index
         
-        plt.figure(figsize=(12, 7))
+        # 범례 공간 확보를 위해 가로 길이를 늘림
+        plt.figure(figsize=(14, 8))
         for spec in current_top10:
-            # 최근 최대 14일치 데이터만 시각화
             plot_data = df_hist[spec].tail(14)
             plt.plot(plot_data.index, plot_data.values, marker='o', linewidth=3, label=spec)
             
-            # 선 끝에 특성 이름 표시
-            plt.text(len(plot_data)-0.5, plot_data.values[-1], spec, fontsize=9, va='center')
-
-        plt.title(f"{target}+ {mode.upper()} Top 10 Rank Trend", fontsize=15, pad=20)
-        plt.ylabel("Rank", fontsize=12)
+        plt.title(f"{target}+ {mode.upper()} Top 10 Spec Rank Trend", fontsize=16, pad=20)
+        plt.ylabel("Rank (Top 1 is Higher)", fontsize=12)
         plt.xlabel("Date", fontsize=12)
-        
-        # Y축 반전 (1위가 맨 위로)
         plt.gca().invert_yaxis()
+        plt.yticks(range(1, 16)) # 1~15위까지만 표시하여 집중도 향상
+        plt.grid(True, axis='y', linestyle='--', alpha=0.5)
         
-        # Y축 눈금을 1위부터 20위 정도까지만 표시 (가독성)
-        plt.yticks(range(1, 21))
-        plt.grid(True, axis='y', linestyle='--', alpha=0.6)
-        plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15), ncol=3, fontsize=9)
+        # 범례(Legend)를 그래프 오른쪽에 배치하여 겹치지 않게 함
+        plt.legend(title="Specs", bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=10)
+        
         plt.tight_layout()
-
-        plt.savefig(f"{folder}/rank_trend_graph.png", dpi=150)
+        plt.savefig(f"plots/{mode}_{target}_trend.png", dpi=150)
         plt.close()
-        print(f"✅ {folder} 업데이트 완료")
 
-print("\n🎉 모든 작업이 완료되었습니다!")
+    # 통합 티어 리스트 저장 (tier_list 폴더)
+    # 2200+ 상위 % 기준 정렬
+    if 2100 in current_df.index:
+        df_tier = (100 - current_df.loc[[r-100 for r in target_ratings if r-100 in current_df.index]]).T
+        df_tier.columns = [f"{int(r)}+ 상위 (%)" for r in target_ratings if r-100 in current_df.index]
+        df_tier.sort_values(by=df_tier.columns[2] if len(df_tier.columns)>2 else df_tier.columns[0], ascending=False).to_csv(f"{mode}_tier_list/ranking_{today}.csv", encoding="utf-8-sig")
+
+print("\n🎉 구조 최적화 및 최신 트렌드 시각화 완료!")
