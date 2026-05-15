@@ -15,13 +15,21 @@ Plaintext
 .
 
 ├── 3v3_percentile/        # 3v3 투기장 날짜별 원본 백분위 데이터 (CSV)
+
 ├── shuffle_percentile/    # 솔로 셔플 날짜별 원본 백분위 데이터 (CSV)
+
 ├── 3v3_tier_list/         # 3v3 점수대별 상위 % 통합 랭킹 리스트
+
 ├── shuffle_tier_list/     # 솔로 셔플 점수대별 상위 % 통합 랭킹 리스트
+
 ├── rank_history/          # 시계열 분석을 위한 점수대별 순위 누적 데이터
+
 ├── plots/                 # [최신] 메타 트렌드 시각화 그래프 (PNG)
+
 ├── main.py                # 데이터 수집 및 분석 핵심 엔진
+
 └── .github/workflows/     # GitHub Actions 자동화 설정 (매일 09:00 실행)
+
 📈 메타 트렌드 미리보기 (Visual Preview)
 plots/ 폴더에서 각 점수대별 최신 트렌드 그래프를 확인할 수 있습니다. 그래프의 Y축은 순위(Rank)를 나타내며, 위로 갈수록 해당 점수대에서 가장 강력한 성능(또는 인구수)을 보여주는 1티어 특성입니다.
 
