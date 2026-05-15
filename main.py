@@ -10,24 +10,32 @@ plt.switch_backend('Agg')
 plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
 
 # --- [설정 변수] ---
-CHART_DAYS = 60  # 그래프에 보여줄 기간 (원하시는 대로 숫자를 키우세요!)
-TOP_N = 10       # 순위권 몇 위까지 보여줄지
+CHART_DAYS = 60  # 요청하신 대로 60일(약 2달)로 연장
+VIEW_RANK_LIMIT = 10  # 그래프에 실제로 보여줄 순위 상한선
 # ------------------
 
 today = datetime.now().strftime("%Y-%m-%d")
-print(f"📅 [분석 시작] {today} - 최근 {CHART_DAYS}일간의 트렌드 분석을 시작합니다.")
+print(f"📅 [분석 시작] {today} - 전체 특성 추적 및 1~{VIEW_RANK_LIMIT}위 집중 분석을 시작합니다.")
 
 # 폴더 생성
-for folder in ["3v3_percentile", "shuffle_percentile", "3v3_tier_list", "shuffle_tier_list", "rank_history", "plots"]:
+base_folders = ["3v3_percentile", "shuffle_percentile", "3v3_tier_list", "shuffle_tier_list", "rank_history", "plots"]
+for folder in base_folders:
     os.makedirs(folder, exist_ok=True)
 
+# 악마사냥꾼 'devour' 특성 추가 반영
 wow_classes = {
-    "death-knight": ["blood", "frost", "unholy"], "demon-hunter": ["havoc", "vengeance"],
-    "druid": ["balance", "feral", "guardian", "restoration"], "evoker": ["augmentation", "devastation", "preservation"],
-    "hunter": ["beast-mastery", "marksmanship", "survival"], "mage": ["arcane", "fire", "frost"],
-    "monk": ["brewmaster", "mistweaver", "windwalker"], "paladin": ["holy", "protection", "retribution"],
-    "priest": ["discipline", "holy", "shadow"], "rogue": ["assassination", "outlaw", "subtlety"],
-    "shaman": ["elemental", "enhancement", "restoration"], "warlock": ["affliction", "demonology", "destruction"],
+    "death-knight": ["blood", "frost", "unholy"],
+    "demon-hunter": ["havoc", "vengeance", "devour"], # Devour 추가
+    "druid": ["balance", "feral", "guardian", "restoration"],
+    "evoker": ["augmentation", "devastation", "preservation"],
+    "hunter": ["beast-mastery", "marksmanship", "survival"],
+    "mage": ["arcane", "fire", "frost"],
+    "monk": ["brewmaster", "mistweaver", "windwalker"],
+    "paladin": ["holy", "protection", "retribution"],
+    "priest": ["discipline", "holy", "shadow"],
+    "rogue": ["assassination", "outlaw", "subtlety"],
+    "shaman": ["elemental", "enhancement", "restoration"],
+    "warlock": ["affliction", "demonology", "destruction"],
     "warrior": ["arms", "fury", "protection"]
 }
 
@@ -69,7 +77,6 @@ for mode in ["3v3", "shuffle"]:
         
         if os.path.exists(hist_file):
             df_hist = pd.read_csv(hist_file, index_col=0)
-            # 중복 데이터 방지 (오늘 이미 실행했다면 덮어쓰기)
             if today in df_hist.index:
                 df_hist.loc[today] = df_rank_today.loc[today]
             else:
@@ -78,38 +85,43 @@ for mode in ["3v3", "shuffle"]:
             df_hist = df_rank_today
         df_hist.to_csv(hist_file, encoding="utf-8-sig")
 
-        # --- 그래프 생성 최적화 ---
-        current_top_n = ranks.sort_values().head(TOP_N).index
-        plt.figure(figsize=(15, 9)) # 가로 길이를 더 늘려 시원하게 만듦
+        # --- 그래프 생성 (모든 특성 플로팅 + 1~10위 뷰포트) ---
+        plt.figure(figsize=(16, 10))
         
-        for spec in current_top_n:
-            # 설정한 기간만큼 데이터 슬라이싱
+        # 1. 범례 정렬: 최신 날짜(오늘)의 순위 기준 (1등부터 꼴등까지)
+        latest_ranks = df_hist.iloc[-1].sort_values()
+        sorted_specs = latest_ranks.index
+
+        for spec in sorted_specs:
             plot_data = df_hist[spec].tail(CHART_DAYS)
-            plt.plot(plot_data.index, plot_data.values, marker='o', markersize=4, linewidth=2.5, label=spec)
             
-        plt.title(f"{target}+ {mode.upper()} Top {TOP_N} Rank Trend (Last {CHART_DAYS} Days)", fontsize=18, pad=25)
+            # 오늘 10위 안에 들었으면 굵게, 아니면 얇게 (가독성 유지)
+            is_top_10 = latest_ranks[spec] <= VIEW_RANK_LIMIT
+            line_width = 3.5 if is_top_10 else 1.0
+            line_alpha = 1.0 if is_top_10 else 0.2 # 10위 밖은 배경처럼 흐리게
+            
+            plt.plot(plot_data.index, plot_data.values, marker='o', 
+                     markersize=4 if is_top_10 else 0, # 10위 밖은 마커 생략
+                     linewidth=line_width, alpha=line_alpha, label=spec)
+
+        plt.title(f"{target}+ {mode.upper()} Top 10 Meta Focus (Last {CHART_DAYS} Days)", fontsize=20, pad=30)
         plt.ylabel("Rank", fontsize=14)
         plt.xlabel("Date", fontsize=14)
+        
+        # Y축 반전 및 1~10위로 뷰포트 고정
         plt.gca().invert_yaxis()
+        plt.ylim(VIEW_RANK_LIMIT + 0.5, 0.5) # 10.5위 ~ 0.5위까지 보여줌으로써 1~10위를 중앙에 배치
         
-        # 가독성을 위해 Y축 범위를 1위부터 15위 정도로 고정
-        plt.yticks(range(1, 16))
-        
-        # X축 날짜가 많아질 경우 글자가 겹치지 않게 45도 회전
+        plt.yticks(range(1, VIEW_RANK_LIMIT + 1))
         plt.xticks(rotation=45)
+        plt.grid(True, axis='y', linestyle='--', alpha=0.3)
         
-        plt.grid(True, axis='y', linestyle='--', alpha=0.5)
-        plt.legend(title="Specs", bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=11)
+        # 2. 범례 최신 순위순으로 표시 (4열로 배치하여 공간 절약)
+        plt.legend(title="Specs (Ranked Today)", bbox_to_anchor=(0.5, -0.15), 
+                   loc='upper center', ncol=4, fontsize=9, frameon=True)
         
         plt.tight_layout()
         plt.savefig(f"plots/{mode}_{target}_trend.png", dpi=150)
         plt.close()
 
-    # 통합 티어 리스트 저장 (가장 최신 날짜 기준)
-    if 2100 in current_df.index:
-        df_tier = (100 - current_df.loc[[r-100 for r in target_ratings if r-100 in current_df.index]]).T
-        df_tier.columns = [f"{int(r)}+ 상위 (%)" for r in target_ratings if r-100 in current_df.index]
-        sort_col = df_tier.columns[2] if len(df_tier.columns)>2 else df_tier.columns[0]
-        df_tier.sort_values(by=sort_col, ascending=False).to_csv(f"{mode}_tier_list/ranking_{today}.csv", encoding="utf-8-sig")
-
-print(f"\n🎉 분석 완료! 최근 {CHART_DAYS}일간의 트렌드가 plots 폴더에 업데이트되었습니다.")
+print(f"\n🎉 작업 완료! {CHART_DAYS}일간의 전체 데이터를 바탕으로 1~10위 집중 그래프가 생성되었습니다.")
