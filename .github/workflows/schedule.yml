@@ -34,9 +34,9 @@ jobs:
         git config --global user.name 'github-actions[bot]'
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
         git add .
-        # 변경된 파일이 있는지 확인 후, 있을 때만 업로드
         if ! git diff-index --quiet HEAD; then
           git commit -m "Auto-update daily WoW data"
+          git pull --rebase origin main  # <--- 이 줄이 추가되었습니다! (웹의 최신 상태를 먼저 합침)
           git push
         else
           echo "업데이트할 새로운 데이터(변경사항)가 없습니다."
