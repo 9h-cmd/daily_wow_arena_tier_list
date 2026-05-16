@@ -2,7 +2,8 @@ import requests
 import pandas as pd
 import time
 import os
-from datetime import datetime
+# 수정 후 (timezone과 timedelta를 함께 불러옵니다)
+from datetime import datetime, timezone, timedelta
 import matplotlib.pyplot as plt
 
 # 서버 환경 및 폰트 설정
@@ -23,7 +24,8 @@ CLASS_COLORS = {
 }
 # ---------------------------
 
-today = datetime.now().strftime("%Y-%m-%d")
+# 수정 후 (서버 시간에 무조건 9시간을 더해 한국 시간으로 고정)
+today = (datetime.now(timezone.utc) + timedelta(hours=9)).strftime("%Y-%m-%d")
 print(f"📅 [기능 데이터 확장] {today} - 순위와 상위 %를 동시에 기록 및 시각화합니다.")
 
 # 1. 고정 폴더 생성
