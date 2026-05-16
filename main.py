@@ -24,7 +24,7 @@ CLASS_COLORS = {
 # ---------------------------
 
 today = datetime.now().strftime("%Y-%m-%d")
-print(f"📅 [시각화 개선] {today} - 가독성을 높인 그래프 생성을 시작합니다.")
+print(f"📅 [기능 데이터 확장] {today} - 순위와 상위 %를 동시에 기록 및 시각화합니다.")
 
 # 1. 고정 폴더 생성
 base_folders = [
@@ -35,7 +35,7 @@ base_folders = [
 for folder in base_folders:
     os.makedirs(folder, exist_ok=True)
 
-# 직업 및 특성 정의 (악마사냥꾼 devour 포함)
+# 직업 및 특성 정의
 wow_classes = {
     "death-knight": ["blood", "frost", "unholy"],
     "demon-hunter": ["havoc", "vengeance", "devour"],
@@ -87,44 +87,52 @@ for mode in ["3v3", "shuffle"]:
         top_pct = 100 - current_df.loc[calc_r]
         ranks = top_pct.rank(ascending=False, method='min')
         
-        # 히스토리 업데이트 (rank_history 폴더로 집중)
+        # [데이터 확장] 오늘자 순위와 %를 딕셔너리로 결합
+        today_data = {}
+        for spec in ranks.index:
+            today_data[f"{spec} (Rank)"] = ranks[spec]
+            today_data[f"{spec} (%)"] = round(top_pct[spec], 3)
+        df_rank_today = pd.DataFrame([today_data], index=[today])
+        
         hist_file = f"rank_history/{mode}_{target}_history.csv"
-        df_rank_today = pd.DataFrame(ranks).T
-        df_rank_today.index = [today]
         
         if os.path.exists(hist_file):
             df_hist = pd.read_csv(hist_file, index_col=0)
-            if today in df_hist.index:
-                df_hist.loc[today] = df_rank_today.loc[today]
+            # 만약 기존 구버전 파일(괄호 없는 옛날 포맷)이면 구조 충돌 방지를 위해 새로 리셋
+            if not any("(Rank)" in col for col in df_hist.columns):
+                df_hist = df_rank_today
             else:
-                df_hist = pd.concat([df_hist, df_rank_today])
+                if today in df_hist.index:
+                    df_hist.loc[today] = df_rank_today.loc[today]
+                else:
+                    df_hist = pd.concat([df_hist, df_rank_today])
         else:
             df_hist = df_rank_today
         df_hist.to_csv(hist_file, encoding="utf-8-sig")
 
-        # 4. 그래프 생성 (plots 폴더로 집중, 최신 1개만 유지)
-        plt.figure(figsize=(16, 9), facecolor='#1e1e1e') # 어두운 배경 테마
+        # 4. 그래프 생성 (Plots)
+        plt.figure(figsize=(16, 9), facecolor='#1e1e1e')
         ax = plt.gca()
         ax.set_facecolor('#1e1e1e')
         
-        latest_ranks = df_hist.iloc[-1].sort_values()
+        latest_ranks = ranks.sort_values()
         sorted_specs = latest_ranks.index
 
         for spec in sorted_specs:
-            plot_data = df_hist[spec].tail(CHART_DAYS)
+            # 그래프 선은 (Rank) 데이터를 추적해서 그림
+            plot_data = df_hist[f"{spec} (Rank)"].tail(CHART_DAYS)
             is_top_10 = latest_ranks[spec] <= VIEW_RANK_LIMIT
             
-            # 직업 이름 추출하여 색상 매칭 (예: "Mage - Frost" -> "Mage")
             class_name = spec.split(" - ")[0]
             line_color = CLASS_COLORS.get(class_name, "#888888")
             
             if is_top_10:
-                # Top 10은 굵고 진하게, 범례(label) 등록
+                # 범례(Legend) 포맷 변경: [1위] 특성명 (상위 0.45%)
+                current_pct = today_data[f"{spec} (%)"]
                 plt.plot(plot_data.index, plot_data.values, marker='o', 
                          markersize=6, linewidth=3.5, color=line_color, 
-                         alpha=1.0, label=f"[{int(latest_ranks[spec])}위] {spec}")
+                         alpha=1.0, label=f"[{int(latest_ranks[spec])}위] {spec} ({current_pct}%)")
             else:
-                # 10위 밖은 얇고 투명하게, 범례에서 제외 (label 생략)
                 plt.plot(plot_data.index, plot_data.values, color=line_color, 
                          linewidth=0.8, alpha=0.15)
 
@@ -136,14 +144,12 @@ for mode in ["3v3", "shuffle"]:
         plt.yticks(range(1, VIEW_RANK_LIMIT + 1), color='white')
         plt.xticks(rotation=45, color='white')
         
-        # 그리드 및 테두리 색상 조정
         plt.grid(True, axis='y', linestyle='--', alpha=0.2, color='white')
         for spine in ax.spines.values():
             spine.set_edgecolor('#444444')
             
-        # 범례 설정: Top 10만 깔끔하게 우측 배치
         if not df_hist.empty:
-            plt.legend(title="Top 10 Specs Today", bbox_to_anchor=(1.02, 1), 
+            plt.legend(title="Top 10 Specs (Rank & Top %)", bbox_to_anchor=(1.02, 1), 
                        loc='upper left', fontsize=11, facecolor='#2d2d2d', 
                        edgecolor='#444444', labelcolor='white')
         
@@ -158,4 +164,4 @@ for mode in ["3v3", "shuffle"]:
         sort_col = df_tier.columns[2] if len(df_tier.columns)>2 else df_tier.columns[0]
         df_tier.sort_values(by=sort_col, ascending=False).to_csv(f"{mode}_tier_list/ranking_{today}.csv", encoding="utf-8-sig")
 
-print("\n🎉 구조 최적화 및 최신 트렌드 시각화 완료!")
+print("\n🎉 순위 및 백분위 확장 데이터 저장 완료!")
