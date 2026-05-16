@@ -149,7 +149,7 @@ for mode in ["3v3", "shuffle"]:
             spine.set_edgecolor('#444444')
             
         if not df_hist.empty:
-            plt.legend(title=f"Top {VIEW_RANK_LIMIT} Specs (Rank & Top %)", bbox_to_anchor=(1.02, 1), ... ), 
+            plt.legend(title=f"Top {VIEW_RANK_LIMIT} Specs (Rank & Top %)", bbox_to_anchor=(1.02, 1),
                        loc='upper left', fontsize=11, facecolor='#2d2d2d', 
                        edgecolor='#444444', labelcolor='white')
         
