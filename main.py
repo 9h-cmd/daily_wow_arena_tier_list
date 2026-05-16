@@ -11,7 +11,7 @@ plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
 
 # --- [설정 및 색상 정의] ---
 CHART_DAYS = 60
-VIEW_RANK_LIMIT = 10
+VIEW_RANK_LIMIT = 20
 
 # 와우 직업별 공식 색상 (Hex Code)
 CLASS_COLORS = {
