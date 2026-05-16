@@ -5,6 +5,7 @@ import os
 from datetime import datetime
 import matplotlib.pyplot as plt
 
+# 서버 환경 및 폰트 설정
 plt.switch_backend('Agg')
 plt.rcParams['font.sans-serif'] = ['DejaVu Sans']
 
@@ -20,22 +21,88 @@ CLASS_COLORS = {
     "Rogue": "#FFF468", "Shaman": "#0070DD", "Warlock": "#8788EE",
     "Warrior": "#C69B6D"
 }
-
-# ------------------
+# ---------------------------
 
 today = datetime.now().strftime("%Y-%m-%d")
 print(f"📅 [시각화 개선] {today} - 가독성을 높인 그래프 생성을 시작합니다.")
 
-# (기존 폴더 생성 및 wow_classes 정의 생략 - 이전과 동일하게 유지)
-# ... [중략: 폴더 생성 및 데이터 수집 로직은 그대로 사용하세요] ...
+# 1. 고정 폴더 생성
+base_folders = [
+    "3v3_percentile", "shuffle_percentile", 
+    "3v3_tier_list", "shuffle_tier_list",
+    "rank_history", "plots"
+]
+for folder in base_folders:
+    os.makedirs(folder, exist_ok=True)
 
-# 3. 점수대별 시각화 로직 (이 부분이 핵심 수정 사항입니다)
+# 직업 및 특성 정의 (악마사냥꾼 devour 포함)
+wow_classes = {
+    "death-knight": ["blood", "frost", "unholy"],
+    "demon-hunter": ["havoc", "vengeance", "devour"],
+    "druid": ["balance", "feral", "guardian", "restoration"],
+    "evoker": ["augmentation", "devastation", "preservation"],
+    "hunter": ["beast-mastery", "marksmanship", "survival"],
+    "mage": ["arcane", "fire", "frost"],
+    "monk": ["brewmaster", "mistweaver", "windwalker"],
+    "paladin": ["holy", "protection", "retribution"],
+    "priest": ["discipline", "holy", "shadow"],
+    "rogue": ["assassination", "outlaw", "subtlety"],
+    "shaman": ["elemental", "enhancement", "restoration"],
+    "warlock": ["affliction", "demonology", "destruction"],
+    "warrior": ["arms", "fury", "protection"]
+}
+
+target_ratings = [2000, 2100, 2200, 2300, 2400, 2500]
+ratings_idx = list(range(1000, 2700, 100))
+headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+# 2. 데이터 수집 및 처리
 for mode in ["3v3", "shuffle"]:
-    # ... [중략: 데이터 수집 및 csv 저장 로직] ...
+    url_part = "leaderboard-distrubution" if mode == "3v3" else "shuffle-distrubution"
+    print(f"\n--- {mode.upper()} 데이터 수집 중 ---")
+    current_df = pd.DataFrame(index=ratings_idx)
     
+    for cls, specs in wow_classes.items():
+        for spec in specs:
+            col = f"{cls.replace('-', ' ').title()} - {spec.replace('-', ' ').title()}"
+            url = f"https://drustvar.com/api/v1/leaderboard/{url_part}?search[region]=all&search[bracket]={mode}&search[role]=spec&search[cc]={cls}&search[cs]={spec}"
+            try:
+                res = requests.get(url, headers=headers, timeout=10)
+                if res.status_code == 200:
+                    for item in res.json().get("stats", []):
+                        if item["rating"] in current_df.index:
+                            current_df.loc[item["rating"], col] = item["percentile"]
+            except: pass
+            time.sleep(0.4)
+
+    current_df = current_df.ffill().fillna(0)
+    current_df.to_csv(f"{mode}_percentile/raw_{today}.csv", encoding="utf-8-sig")
+
+    # 3. 점수대별 랭킹 및 시각화
     for target in target_ratings:
-        # ... [중략: 히스토리 데이터 로드 로직] ...
+        calc_r = target - 100
+        if calc_r not in current_df.index: continue
+
+        # 상위 % 계산 및 순위
+        top_pct = 100 - current_df.loc[calc_r]
+        ranks = top_pct.rank(ascending=False, method='min')
         
+        # 히스토리 업데이트 (rank_history 폴더로 집중)
+        hist_file = f"rank_history/{mode}_{target}_history.csv"
+        df_rank_today = pd.DataFrame(ranks).T
+        df_rank_today.index = [today]
+        
+        if os.path.exists(hist_file):
+            df_hist = pd.read_csv(hist_file, index_col=0)
+            if today in df_hist.index:
+                df_hist.loc[today] = df_rank_today.loc[today]
+            else:
+                df_hist = pd.concat([df_hist, df_rank_today])
+        else:
+            df_hist = df_rank_today
+        df_hist.to_csv(hist_file, encoding="utf-8-sig")
+
+        # 4. 그래프 생성 (plots 폴더로 집중, 최신 1개만 유지)
         plt.figure(figsize=(16, 9), facecolor='#1e1e1e') # 어두운 배경 테마
         ax = plt.gca()
         ax.set_facecolor('#1e1e1e')
@@ -83,3 +150,12 @@ for mode in ["3v3", "shuffle"]:
         plt.tight_layout()
         plt.savefig(f"plots/{mode}_{target}_trend.png", dpi=150, facecolor='#1e1e1e')
         plt.close()
+
+    # 통합 티어 리스트 저장 (tier_list 폴더)
+    if 2100 in current_df.index:
+        df_tier = (100 - current_df.loc[[r-100 for r in target_ratings if r-100 in current_df.index]]).T
+        df_tier.columns = [f"{int(r)}+ 상위 (%)" for r in target_ratings if r-100 in current_df.index]
+        sort_col = df_tier.columns[2] if len(df_tier.columns)>2 else df_tier.columns[0]
+        df_tier.sort_values(by=sort_col, ascending=False).to_csv(f"{mode}_tier_list/ranking_{today}.csv", encoding="utf-8-sig")
+
+print("\n🎉 구조 최적화 및 최신 트렌드 시각화 완료!")
