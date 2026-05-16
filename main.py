@@ -136,7 +136,7 @@ for mode in ["3v3", "shuffle"]:
                 plt.plot(plot_data.index, plot_data.values, color=line_color, 
                          linewidth=0.8, alpha=0.15)
 
-        plt.title(f"{target}+ {mode.upper()} Top 10 Trend", fontsize=20, pad=30, color='white')
+        plt.title(f"{target}+ {mode.upper()} Top {VIEW_RANK_LIMIT} Trend", fontsize=20, pad=30, color='white')
         plt.ylabel("Rank", fontsize=14, color='white')
         
         plt.gca().invert_yaxis()
@@ -149,7 +149,7 @@ for mode in ["3v3", "shuffle"]:
             spine.set_edgecolor('#444444')
             
         if not df_hist.empty:
-            plt.legend(title="Top 10 Specs (Rank & Top %)", bbox_to_anchor=(1.02, 1), 
+            plt.legend(title=f"Top {VIEW_RANK_LIMIT} Specs (Rank & Top %)", bbox_to_anchor=(1.02, 1), ... ), 
                        loc='upper left', fontsize=11, facecolor='#2d2d2d', 
                        edgecolor='#444444', labelcolor='white')
         
